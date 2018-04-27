@@ -1,0 +1,226 @@
+---
+title: 'Yelp Reviews Analysis: Las Vegas'
+output:
+  html_document:
+    df_print: paged
+---
+
+
+For Project of Course: Social Network Analysis
+Team Members: Kumar Bipulesh, Taranpreet Singh
+
+In the first part analysis on Restaurants in the Las vegas has been done.
+
+```{r message=FALSE, warning=FALSE}
+library(tidyverse)
+library(stringr)
+library(ggmap)
+df <- read_csv("vegasRst.csv")
+glimpse(df)
+#5902,9
+#businessId/ name
+summary(df)
+```
+ 
+##### Key points - 
+Average rating: 3.45
+
+Closed Restaurants: 33%
+
+Avg Review count: 157
+
+Next, The relation between business_ids and business_names is analyzed.
+```{r}
+
+nlevels(as.factor(df$categories))
+#3601 cats
+nlevels(as.factor(df$business_id))
+#5902
+nlevels(as.factor(df$business_name))
+#4300
+# some businesses with more than 1 business id
+
+df %>% select(business_name) %>% group_by(business_name) %>%
+  count() %>%  arrange(desc(n)) %>% head(10)
+
+
+```
+
+We can see that some businesses names have more than 1 business_ids, this is due to food chains such as KFC, etc
+
+##### Stars Distribution
+```{r message=FALSE, warning= F}
+# stars count
+df %>% select(stars) %>% group_by(stars) %>%
+  count() %>%  arrange(desc(stars))
+
+# histogram
+ggplot(df, aes(x=stars)) + geom_histogram() + ggtitle("Distribution of Stars") #+ th
+
+```
+
+To see how the resaturants are ranked a new variable score is created by multiplying stars with review counts. For initial exploration we have not considered the Time factor while creating score for each restaurant.
+Top rated reataurants and restaurants with least rated.
+```{r}
+df$score <- df$stars * df$review_count
+summary(df$score)
+
+#by business -top
+df %>% select(business_name,score) %>% group_by(business_name) %>% 
+  summarise( avg = mean(score), count = n()) %>%  arrange(desc(avg)) %>% head(5)
+ 
+# single place businesses lead
+
+df %>% select(business_name,score) %>% group_by(business_name) %>% 
+  summarise( avg = mean(score),count= n()) %>%  arrange(avg) %>% 
+  head(10) 
+
+```
+
+Top rated closed restaurants
+
+```{r}
+df %>% select(business_name,score,is_open) %>%  arrange(desc(score)) %>% 
+  filter(is_open==0) %>%  head(10)
+```
+
+##### Geo-spatial analysis
+
+```{r message=FALSE, warning=FALSE,error=F}
+
+#Geo spatial analysis
+#ggplot(df,aes(longitude,latitude, color=stars)) + geom_point() 
+#Filtering points
+df %>% filter(latitude > 35.95 & latitude < 36.4 & longitude > -115.37 & longitude < -115) %>% 
+  ggplot(aes(longitude,latitude, color=stars)) + geom_point() 
+
+#coordinates of vegas
+#36.1699 N, 115.1398 W
+
+vegas <- c(lon = -115.1398, lat = 36.1699)
+
+# 
+map <- get_map(vegas, zoom = 11, scale = 1)
+
+ggmap(map) 
+
+mapdf <- df %>% 
+  filter(latitude > 35.95 & latitude < 36.4 & longitude > -115.37 & longitude < -115)
+
+ggmap(map) + geom_point(aes(longitude,latitude, color=stars), data = mapdf)
+
+
+```
+
+Part 2
+
+##### Exploration of restaurants reviews
+```{r message =FALSE, include =FALSE}
+
+dfRev <- read_csv("vegasRstRev.csv")
+# 929636,9
+
+```
+
+```{r}
+glimpse(dfRev)
+#key business_id
+summary(dfRev)
+#?? funny cool useful
+
+# date range # 2005-01-24 2017-12-11 
+
+nlevels(as.factor(dfRev$business_id))
+#5902 businesses
+nlevels(as.factor(dfRev$user_id))
+#337874 users
+```
+
+```{r}
+#users with high number of reviews
+dfRev %>% select(user_id) %>% group_by(user_id) %>%  summarise(count = n()) %>% 
+  arrange(desc(count)) %>%  head(10)
+#bLbSNkLggFnqwNNzzq-Ijw  1175
+
+dfRev %>% select(business_id) %>% group_by(business_id) %>%  summarise(count = n()) %>% 
+  arrange(desc(count)) %>%  head(10)
+
+```
+
+Time series
+
+```{r}
+#number of reviews on particular date
+dfRev %>% select(review_id,date) %>% group_by(date) %>% 
+  summarise(count=n()) %>% arrange(desc(count)) %>% head()
+
+#time series plot 
+dfRev %>% select(review_id,date) %>% group_by(date) %>% 
+  summarise(count=n()) %>%
+  ggplot(aes(x=date,y=count)) + geom_line(color='darkorange',alpha=0.8)
+
+# From 2015
+dfRev %>% select(review_id,date) %>% filter(date > as.Date('2015-01-01')) %>% group_by(date) %>% 
+  summarise(count=n()) %>% 
+  ggplot(aes(x=date,y=count)) + geom_line(color='darkorange',alpha=0.8,size=0.3) 
+
+
+```
+
+
+Word counts
+```{r warning = FALSE}
+# word count average for +3 reviews
+dfRev$wc <- str_count(dfRev$text)
+#
+mean(dfRev$wc)
+#612
+
+
+mean(dfRev$wc[dfRev$stars>3])
+# 560.0811
+
+mean(dfRev$wc[dfRev$stars<3])
+#709.8648
+
+mean(dfRev$wc[dfRev$stars>4])
+# 500.0811
+
+mean(dfRev$wc[dfRev$stars<2])
+# 676
+
+ggplot(dfRev,aes(x=date,y=wc)) + geom_line(color='darkorange',alpha=0.3,size=0.2) 
+
+```
+
+##### Fake id's
+
+```{r message =FALSE, include=F, warning=FALSE}
+usr <- read_csv("vegasUsers.csv")
+
+
+```
+
+```{r}
+str5 <- usr %>% select(user_id,review_count,average_stars,yelping_since) %>% 
+  filter(average_stars==5,review_count > 25) %>% 
+  arrange(desc(review_count))  %>% select(user_id,average_stars,review_count)
+
+
+fake_ids <- dfRev %>% select(user_id,business_id) %>% 
+  filter(user_id %in% unlist(str5$user_id)) %>%
+  group_by(user_id) %>% summarise( BsnsReviwed = n_distinct(business_id)) %>% 
+  filter(BsnsReviwed<3) %>% arrange(BsnsReviwed) 
+
+
+fake_ids <- left_join(fake_ids,str5)
+
+fake_ids %>% arrange(desc(review_count)) %>% head()
+
+
+```
+
+
+
+
+
